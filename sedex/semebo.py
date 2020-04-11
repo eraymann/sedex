@@ -10,8 +10,20 @@ from xml.dom import minidom
 
 
 class MessageBox(object):
+    """Create an instance of MessageBox to manage your SEDEX messages easily.
+    You can search your inbox for specific message types or reception times, clean up your inbox or send messages.
+    All this with a few simple lines of Python.
+    This module never interferes with the SEDEX core functionality of secure data transmission but simplifies the management of inbox and outbox.
+    Please read the information on this carefully: https://www.bfs.admin.ch/bfs/de/home/register/personenregister/sedex.html
+    """
 
     def __init__(self, inbox, outbox, logs=None):
+        """Ask your administrator for the required paths.
+
+        :param inbox: Full qualified path to your sedex inbox
+        :param outbox: Full qualified path to your sedex outbox
+        :param logs: Full qualified path to your sedex log s dir (optional)
+        """
         self.inbox = inbox
         self.outbox = outbox
         self.logs = logs
@@ -20,10 +32,9 @@ class MessageBox(object):
     def __parse_xml(xml):
         """Parse envelope xml to Envelope object.
 
-        :param str xml: input xml file path to parse
+        :param str xml: full qualified input xml file path to parse
         :return: Envelope object
         :rtype: Envelope
-
         """
         dom = minidom.parse(xml)
         e = dom.getElementsByTagNameNS("*", "envelope")
@@ -39,15 +50,16 @@ class MessageBox(object):
         )
 
     def send_data(self, data_dir, recipient_id, sender_id, message_type, message_class=None, event_date=None):
-        """Send content of folder and envelope to outbox.
+        """Compresses the content of data_dir into a zip file and puts it together with the envelope into the outbox.
+        The SEDEX core functionality does the rest.
 
-        :param str data_dir: Folder name with data to transmit
+        :param str data_dir: Full qualified folder name with data to transmit
         :param str recipient_id: ID of recipient
         :param str sender_id: ID of sender
-        :param int message_type: Message type agreed upon by the corresponding offices
+        :param int message_type: Message type. See https://www.bfs.admin.ch/bfs/de/home/register/personenregister/sedex/meldungstyp.html
         :param MessageClass message_class: Message class (optional)
-        :param datetime.datetime event_date: Date of the event to which the data refer (optional)
-        :return: transfer id as uuid and envelope Object
+        :param datetime.datetime event_date: Date of the event to which the data refers (optional)
+        :return: transfer id as uuid,  envelope Object
         :rtype: (uuid.UUID, Envelope)
         """
 
@@ -88,10 +100,10 @@ xsi:schemaLocation="http://www.ech.ch/xmlns/eCH-0090/1 http://www.ech.ch/xmlns/e
 
         return transfer_id, envelope
 
-    def scan_inbox(self, sender_id=None, from_date=datetime.datetime(year=2000, month=1, day=1), to_date=datetime.datetime.now()):
-        """Scan inbox for specific senders and times.
+    def scan_inbox(self, message_type=None, from_date=datetime.datetime(year=2000, month=1, day=1), to_date=datetime.datetime.now()):
+        """Get a list of all messages of specific type and/or within a specific time interval.
 
-        :param str sender_id: ID of sender (optional)
+        :param int message_type: Message type (optional). See https://www.bfs.admin.ch/bfs/de/home/register/personenregister/sedex/meldungstyp.html
         :param datetime.datetime from_date: Start time of the scan interval (optional)
         :param datetime.datetime to_date: End time of the scan interval (optional)
         :return: List of Message objects that match the scan criteria
@@ -99,14 +111,14 @@ xsi:schemaLocation="http://www.ech.ch/xmlns/eCH-0090/1 http://www.ech.ch/xmlns/e
         """
 
         logging.debug("scanning sedex inbox {} started".format(self.inbox))
-        logging.debug("searching for messages received from {} between {} and {}".format(sender_id,
+        logging.debug("searching for messages received from {} between {} and {}".format(message_type,
                                                                                          datetime.datetime.strftime(from_date, "%Y-%m-%d %H:%M:%S"),
                                                                                          datetime.datetime.strftime(to_date, "%Y-%m-%d %H:%M:%S")))
 
         messages = []
         for xml_file in glob.glob(self.inbox + os.sep + "*.xml"):
             envelope = MessageBox.__parse_xml(xml_file)
-            if (envelope.sender_id == sender_id or sender_id is None) and from_date <= envelope.message_date <= to_date:
+            if (envelope.message_type == message_type or message_type is None) and from_date <= envelope.message_date <= to_date:
                 prefix, guid, extension = re.split("[_.]+", os.path.basename(xml_file))
                 data_file = self.inbox + os.sep + "data_{}.zip".format(guid)
                 logging.debug("{} found".format(data_file))
@@ -114,15 +126,15 @@ xsi:schemaLocation="http://www.ech.ch/xmlns/eCH-0090/1 http://www.ech.ch/xmlns/e
         logging.debug("scanning sedex inbox finished")
         return messages
 
-    def purge_inbox(self, older_than_days=30, sender_id=None, dry_run=False):
+    def purge_inbox(self, older_than_days=30, message_type=None, dry_run=False):
         """Method to clean up inbox.
 
-        :param int older_than_days: delta days (optional)
-        :param str sender_id: id of sender (optional)
+        :param int older_than_days: only messages older than the specified days are deleted (optional)
+        :param int message_type: only messages of specified type are deleted (optional). See https://www.bfs.admin.ch/bfs/de/home/register/personenregister/sedex/meldungstyp.html
         :param bool dry_run: activate for preview of files before deleting (optional)
         """
-        logging.debug("deleting outdated sedex messages started")
-        for message in self.scan_inbox(sender_id=sender_id, to_date=datetime.datetime.today() - datetime.timedelta(days=older_than_days)):
+        logging.debug("inbox cleanup started")
+        for message in self.scan_inbox(message_type=message_type, to_date=datetime.datetime.today() - datetime.timedelta(days=older_than_days)):
             for f in [message.xml_file, message.data_file]:
                 if dry_run:
                     logging.warning("dry-run: {} would be deleted".format(f))
@@ -130,9 +142,10 @@ xsi:schemaLocation="http://www.ech.ch/xmlns/eCH-0090/1 http://www.ech.ch/xmlns/e
                     try:
                         os.remove(f)
                         logging.debug("{} deleted".format(f))
-                    except Exception:
+                    except Exception as e:
                         logging.warning("{} is outdated but could not be deleted".format(f))
-        logging.debug("deleting outdated sedex messages finished")
+                        raise e
+        logging.debug("inbox cleanup finished")
 
 
 class Envelope(object):
@@ -148,6 +161,11 @@ class Envelope(object):
 
 class Message(object):
     def __init__(self, envelope, xml_file, data_file):
+        """
+        :type envelope: Envelope
+        :type xml_file: str
+        :type data_file: str
+        """
         self.envelope = envelope
         self.xml_file = xml_file
         self.data_file = data_file
