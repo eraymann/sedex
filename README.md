@@ -1,2 +1,3 @@
-# sedex
-Secure Data Exchange Message Box
+# SEDEX Messagebox Manager
+
+Long description here.
