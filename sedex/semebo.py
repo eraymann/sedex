@@ -41,34 +41,47 @@ class MessageBox(object):
         p = {n.localName: [a.childNodes[0].nodeValue for a in dom.getElementsByTagNameNS("*", n.localName)][0] for n in e[0].childNodes if n.localName}
         return Envelope(
             message_id=p["messageId"],
-            message_type=p["messageType"],
+            message_type=int(p["messageType"]),
             sender_id=p["senderId"],
             recipient_id=p["recipientId"],
             message_date=datetime.datetime.strptime(p["messageDate"], "%Y-%m-%dT%H:%M:%S"),
-            message_class=p["messageClass"],
+            message_class=int(p["messageClass"]),
             event_date=datetime.datetime.strptime(p["eventDate"], "%Y-%m-%dT%H:%M:%S"),
         )
 
-    def send_data(self, data_dir, recipient_id, sender_id, message_type, message_class=None, event_date=None):
-        """Compresses the content of data_dir into a zip file and puts it together with the envelope into the outbox.
-        The SEDEX core functionality does the rest.
+    def send_data(self, file_or_folder, recipient_id, sender_id, message_type, message_class=None, event_date=None):
+        """Send the entire content of a folder or a single file together with the envelope to the outbox.
+        Folders are automatically compressed to zip archive. Once in the outbox, the SEDEX core functionality does the rest.
 
-        :param str data_dir: Full qualified folder name with data to transmit
+        :param str file_or_folder: Full qualified folder path or single file path
         :param str recipient_id: ID of recipient
         :param str sender_id: ID of sender
         :param int message_type: Message type. See https://www.bfs.admin.ch/bfs/de/home/register/personenregister/sedex/meldungstyp.html
-        :param MessageClass message_class: Message class (optional)
+        :param int message_class: Message class (optional)
         :param datetime.datetime event_date: Date of the event to which the data refers (optional)
         :return: transfer id as uuid,  envelope Object
         :rtype: (uuid.UUID, Envelope)
         """
 
-        # Create transfer UUID
         transfer_id = uuid.uuid4()
+        logging.debug("transfer-ID is {}".format(transfer_id))
 
-        # Generate data zip
-        shutil.make_archive(self.outbox + os.sep + "data_{transferId}".format(transferId=transfer_id), "zip", data_dir)
-        logging.debug("archive created from {}".format(data_dir))
+        # make archive if folder and put to outbox
+        try:
+            if os.path.isdir(file_or_folder):
+                shutil.make_archive(self.outbox + os.sep + "data_{id}".format(id=transfer_id), "zip", file_or_folder)
+                logging.debug("zip archive created and copied to outbox".format(file_or_folder))
+            elif os.path.isfile(file_or_folder):
+                shutil.copyfile(file_or_folder, self.outbox + os.sep + "data_{id}{ext}".format(id=transfer_id, ext=os.path.splitext(file_or_folder)[-1]))
+                logging.debug("file copied to outbox")
+            else:
+                raise ValueError("invalid file or folder path {}".format(file_or_folder))
+        except OSError as ose:
+            logging.error(ose)
+            raise ose
+        except Exception as ex:
+            logging.error(ex)
+            raise ex
 
         # create envelope
         envelope = Envelope(message_id=uuid.uuid4(), message_type=message_type, sender_id=sender_id, recipient_id=recipient_id,
@@ -100,31 +113,34 @@ xsi:schemaLocation="http://www.ech.ch/xmlns/eCH-0090/1 http://www.ech.ch/xmlns/e
 
         return transfer_id, envelope
 
-    def scan_inbox(self, message_type=None, from_date=datetime.datetime(year=2000, month=1, day=1), to_date=datetime.datetime.now()):
-        """Get a list of all messages of specific type and/or within a specific time interval.
+    def scan_inbox(self, message_type=None, from_date=datetime.datetime(year=2000, month=1, day=1), to_date=datetime.datetime.now(), latest=False):
+        """Get a list of all messages of specific type and/or within a specific time interval. Refine results by activating latest.
 
         :param int message_type: Message type (optional). See https://www.bfs.admin.ch/bfs/de/home/register/personenregister/sedex/meldungstyp.html
         :param datetime.datetime from_date: Start time of the scan interval (optional)
         :param datetime.datetime to_date: End time of the scan interval (optional)
-        :return: List of Message objects that match the scan criteria
-        :rtype: list of Message
+        :param bool latest: enable to get only most recent message. If True, from_date and to_date are ignored
+        :return: List of Message objects that match the scan criteria or single Message object if latest is True
+        :rtype: list of Message or Message
         """
+        logging.debug("searching {} of type {} received between {} and {}".format("latest message" if latest else "for messages",
+                                                                                  message_type if message_type is not None else "any",
+                                                                                  datetime.datetime.strftime(from_date, "%Y-%m-%d %H:%M:%S"),
+                                                                                  datetime.datetime.strftime(to_date, "%Y-%m-%d %H:%M:%S")))
 
-        logging.debug("scanning sedex inbox {} started".format(self.inbox))
-        logging.debug("searching for messages received from {} between {} and {}".format(message_type,
-                                                                                         datetime.datetime.strftime(from_date, "%Y-%m-%d %H:%M:%S"),
-                                                                                         datetime.datetime.strftime(to_date, "%Y-%m-%d %H:%M:%S")))
-
-        messages = []
+        messages = {}
         for xml_file in glob.glob(self.inbox + os.sep + "*.xml"):
             envelope = MessageBox.__parse_xml(xml_file)
             if (envelope.message_type == message_type or message_type is None) and from_date <= envelope.message_date <= to_date:
                 prefix, guid, extension = re.split("[_.]+", os.path.basename(xml_file))
-                data_file = self.inbox + os.sep + "data_{}.zip".format(guid)
-                logging.debug("{} found".format(data_file))
-                messages.append(Message(envelope=envelope, xml_file=xml_file, data_file=data_file))
-        logging.debug("scanning sedex inbox finished")
-        return messages
+                data_file = glob.glob(self.inbox + os.sep + "data_{}.*".format(guid))[0]
+                message = Message(envelope=envelope, xml_file=xml_file, data_file=data_file)
+                messages[message.envelope.message_date] = message
+        if messages:
+            return messages[max(messages.keys())] if latest else messages.values()
+        else:
+            logging.warning("no results")
+            return None if latest else []
 
     def purge_inbox(self, older_than_days=30, message_type=None, dry_run=False):
         """Method to clean up inbox.
@@ -150,6 +166,15 @@ xsi:schemaLocation="http://www.ech.ch/xmlns/eCH-0090/1 http://www.ech.ch/xmlns/e
 
 class Envelope(object):
     def __init__(self, message_id, message_type, sender_id, recipient_id, message_date=None, message_class=None, event_date=None):
+        """
+        :type message_id: object
+        :type message_type: int
+        :type sender_id: str
+        :type recipient_id: str
+        :type message_date: datetime.datetime
+        :type message_class: int
+        :type event_date: datetime.datetime
+        """
         self.message_id = message_id
         self.message_type = message_type
         self.sender_id = sender_id
@@ -171,7 +196,7 @@ class Message(object):
         self.data_file = data_file
 
 
-class MessageClass(object):
+class MessageClass(int):
     MESSAGE = 0
     RESPONSE = 1
     RECEIPT = 2
