@@ -1,8 +1,7 @@
 # SEDEX Messagebox Manager
 
 ## Purpose
-This module simplifies the management of your message boxes with asynchronous data exchange via SEDEX.
-https://www.bfs.admin.ch/bfs/de/home/register/personenregister/sedex/asynchron.html
+This module simplifies the management of your message boxes with asynchronous data exchange via [SEDEX](https://www.bfs.admin.ch/bfs/de/home/register/personenregister/sedex/asynchron.html).
 
 
 You can search your inbox for specific message types or receiving times, clean up your inbox or send messages.
