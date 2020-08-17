@@ -42,12 +42,12 @@ class MessageBox(object):
     Please read the information on this carefully: https://www.bfs.admin.ch/bfs/de/home/register/personenregister/sedex.html
     """
 
-    def __init__(self, inbox, outbox, logs=None):
+    def __init__(self, inbox, outbox=None, logs=None):
         """Ask your administrator for the required paths.
 
-        :param inbox: Full qualified path to your sedex inbox
-        :param outbox: Full qualified path to your sedex outbox
-        :param logs: Full qualified path to your sedex log s dir (optional)
+        :param str inbox: Full qualified path to your sedex inbox
+        :param str outbox: Full qualified path to your sedex outbox (optional)
+        :param str logs: Full qualified path to your sedex log s dir (optional)
         """
         self.inbox = inbox
         self.outbox = outbox
@@ -84,7 +84,7 @@ class MessageBox(object):
         :param int message_type: Message type. See https://www.bfs.admin.ch/bfs/de/home/register/personenregister/sedex/meldungstyp.html
         :param int message_class: Message class (optional)
         :param datetime.datetime event_date: Date of the event to which the data refers (optional)
-        :return: transfer id as uuid,  envelope Object
+        :return: transfer id as uuid, envelope Object
         :rtype: (uuid.UUID, Envelope)
         """
 

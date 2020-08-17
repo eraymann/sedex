@@ -30,7 +30,9 @@ Get all messages received _within the last 24h_:
 ```python
 import datetime
 
-for message in messagebox.scan_inbox(from_date=datetime.datetime.now() - datetime.timedelta(hours=24)):
+for message in messagebox.scan_inbox(
+    from_date=datetime.datetime.now() - datetime.timedelta(hours=24)
+):
     print(message.data_file,
           message.envelope.sender_id,
           message.envelope.message_type)
@@ -47,7 +49,12 @@ print(message.data_file,
 Send the entire content of a folder:
 ```python
 data = r"C:\delivery\ready_to_ship"
-transfer_id, envelope = messagebox.send_data(file_or_folder=data, recipient_id="CH1848", sender_id="Z!1819", message_type=1819)
+transfer_id, envelope = messagebox.send_data(
+    file_or_folder=data, 
+    recipient_id="CH1848",
+    sender_id="Z!1819",
+    message_type=1819
+)
 print(transfer_id,
       envelope.message_id,
       envelope.message_date)
