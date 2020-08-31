@@ -1,1 +1,1 @@
-import semebo
+from sedex import semebo

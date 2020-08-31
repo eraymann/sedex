@@ -5,7 +5,7 @@ with open("README.md", "r") as rm:
 
 setuptools.setup(
     name="sedex",
-    version="0.1.5",
+    version="1.0.0",
     description="SEDEX Messagebox Manager",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -14,9 +14,8 @@ setuptools.setup(
     author_email="elias.raymann@swisstopo.ch",
     packages=setuptools.find_packages(),
     classifiers=[
-        "Development Status :: 4 - Beta",
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3",
+        "Development Status :: 5 - Production/Stable",
+        "Programming Language :: Python :: 3.6",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],

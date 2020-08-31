@@ -14,6 +14,16 @@ This module never interferes with the SEDEX core functionality of secure data tr
 
 That's it.
 
+## Versions
+Version|Release Notes
+---|---
+1.0.0|universal package for py2 and py3
+0.1.5|optional outbox parameter
+0.1.4|detailed documentation
+0.1.3|filter for latest message
+0.1.2|publication for testing
+0.1.1|initial publication
+
 ## Examples
 ### Get started
 Create instance by specifying in- and outbox.
